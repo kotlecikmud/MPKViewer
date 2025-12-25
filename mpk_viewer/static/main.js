@@ -128,34 +128,78 @@ function displayRoute(lineId) {
             const routeSelectionContainer = document.getElementById('route-selection-container');
             routeSelectionContainer.innerHTML = '<h4>Routes</h4>';
 
-            data.directions.forEach((direction, index) => {
-                const routeCoordinates = direction.stops
-                    .filter(stop => stop.lat && stop.lon)
-                    .map(stop => [stop.lat, stop.lon]);
+            const routeGroups = {};
+            data.directions.forEach(direction => {
+                const stops = direction.stops;
+                if (stops.length < 2) return; 
+                const startStop = stops[0].name;
+                const endStop = stops[stops.length - 1].name;
+                // Create a canonical key for the route pair
+                const key = [startStop, endStop].sort().join('-');
 
-                let polyline;
-                if (routeCoordinates.length > 0) {
-                    polyline = L.polyline(routeCoordinates, { color: colors[colorIndex % colors.length] }).addTo(map);
-                    routePolylines.push(polyline);
-                    colorIndex++;
+                if (!routeGroups[key]) {
+                    routeGroups[key] = { directions: [] };
                 }
+                routeGroups[key].directions.push(direction);
+            });
 
+            Object.values(routeGroups).forEach((group, groupIndex) => {
+                const groupPolylines = [];
+                group.directions.forEach(direction => {
+                    const routeCoordinates = direction.stops
+                        .filter(stop => stop.lat && stop.lon)
+                        .map(stop => [stop.lat, stop.lon]);
+
+                    if (routeCoordinates.length > 0) {
+                        const polyline = L.polyline(routeCoordinates, { color: colors[colorIndex % colors.length] });
+                        groupPolylines.push(polyline);
+                        routePolylines.push(polyline); // Add to global list for clearing
+                        colorIndex++;
+                    }
+                });
+                
+                // Add all polylines for this group to the map initially
+                groupPolylines.forEach(p => p.addTo(map));
+
+                // Create a single checkbox for the group
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.id = `route-${index}`;
+                checkbox.id = `route-group-${groupIndex}`;
                 checkbox.checked = true;
                 checkbox.addEventListener('change', () => {
-                    if (checkbox.checked) {
-                        if (polyline) map.addLayer(polyline);
-                    } else {
-                        if (polyline) map.removeLayer(polyline);
-                    }
+                    groupPolylines.forEach(p => {
+                        if (checkbox.checked) {
+                            if (p) map.addLayer(p);
+                        } else {
+                            if (p) map.removeLayer(p);
+                        }
+                    });
                 });
 
                 const label = document.createElement('label');
-                label.htmlFor = `route-${index}`;
-                label.textContent = direction.direction_name;
+                label.htmlFor = `route-group-${groupIndex}`;
                 
+                let labelText;
+                // Check if it's a bi-directional pair
+                if (group.directions.length === 2) {
+                    const dir1 = group.directions[0];
+                    const dir2 = group.directions[1];
+                    const start1 = dir1.stops[0].name;
+                    const end1 = dir1.stops[dir1.stops.length - 1].name;
+                    const start2 = dir2.stops[0].name;
+                    const end2 = dir2.stops[dir2.stops.length - 1].name;
+
+                    if (start1 === end2 && end1 === start2) {
+                        labelText = `${start1} <-> ${end1}`;
+                    }
+                }
+                
+                // Fallback for loops or non-paired routes
+                if (!labelText) {
+                    labelText = group.directions.map(d => d.direction_name).join(' / ');
+                }
+                label.textContent = labelText;
+
                 const routeControl = document.createElement('div');
                 routeControl.appendChild(checkbox);
                 routeControl.appendChild(label);
