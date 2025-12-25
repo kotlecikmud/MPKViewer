@@ -1,3 +1,5 @@
 Flask
 mpyk
 geopy
+osmnx
+scikit-learn
