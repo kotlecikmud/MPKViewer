@@ -1,7 +1,7 @@
 @echo off
 
 git add .
-git commit -m 'repo_cleanup'
+git commit -m ''
 git push
 
 echo Repo pushed
