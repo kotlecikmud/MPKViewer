@@ -106,8 +106,13 @@ function displayRoute(lineId) {
         })
         .then(data => {
             if (data.error) {
-                console.error("Error fetching route data:", data.error);
-                alert(`Error: ${data.error}`);
+                const stopsContainer = document.getElementById('stops-container');
+                stopsContainer.innerHTML = `<h3>${lineId}</h3><p>${data.error}</p>`;
+                if (data.source) {
+                    stopsContainer.innerHTML += `<p>Data from: ${data.source}</p>`;
+                }
+                document.getElementById('line-selection-container').style.display = 'none';
+                stopsContainer.style.display = 'block';
                 return;
             }
 

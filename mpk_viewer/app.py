@@ -68,7 +68,15 @@ def get_route(line):
     line_data = routes_data.get(line)
     if not line_data:
         return jsonify({"error": "Line not found"}), 404
-        
+
+    # Check if the directions are empty
+    if not line_data.get("directions"):
+        return jsonify({
+            "line": line,
+            "error": "Route details are not available for this line.",
+            "source": line_data.get("source")
+        })
+
     geocoded_directions = []
     for direction in line_data.get("directions", []):
         geocoded_stops = []
