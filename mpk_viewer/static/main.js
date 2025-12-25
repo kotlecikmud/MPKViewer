@@ -131,19 +131,17 @@ function displayRoute(lineId) {
             const routeGroups = {};
             data.directions.forEach(direction => {
                 const stops = direction.stops;
-                if (stops.length < 2) return; 
+                if (stops.length < 2) return;
                 const startStop = stops[0].name;
                 const endStop = stops[stops.length - 1].name;
-                // Create a canonical key for the route pair
                 const key = [startStop, endStop].sort().join('-');
-
                 if (!routeGroups[key]) {
                     routeGroups[key] = { directions: [] };
                 }
                 routeGroups[key].directions.push(direction);
             });
 
-            Object.values(routeGroups).forEach((group, groupIndex) => {
+            Object.values(routeGroups).forEach((group) => {
                 const groupPolylines = [];
                 group.directions.forEach(direction => {
                     const routeCoordinates = direction.stops
@@ -153,56 +151,81 @@ function displayRoute(lineId) {
                     if (routeCoordinates.length > 0) {
                         const polyline = L.polyline(routeCoordinates, { color: colors[colorIndex % colors.length] });
                         groupPolylines.push(polyline);
-                        routePolylines.push(polyline); // Add to global list for clearing
+                        routePolylines.push(polyline);
                         colorIndex++;
                     }
                 });
-                
-                // Add all polylines for this group to the map initially
+
                 groupPolylines.forEach(p => p.addTo(map));
 
-                // Create a single checkbox for the group
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.id = `route-group-${groupIndex}`;
-                checkbox.checked = true;
-                checkbox.addEventListener('change', () => {
-                    groupPolylines.forEach(p => {
-                        if (checkbox.checked) {
-                            if (p) map.addLayer(p);
-                        } else {
-                            if (p) map.removeLayer(p);
-                        }
-                    });
-                });
-
-                const label = document.createElement('label');
-                label.htmlFor = `route-group-${groupIndex}`;
-                
                 let labelText;
-                // Check if it's a bi-directional pair
                 if (group.directions.length === 2) {
-                    const dir1 = group.directions[0];
-                    const dir2 = group.directions[1];
-                    const start1 = dir1.stops[0].name;
-                    const end1 = dir1.stops[dir1.stops.length - 1].name;
-                    const start2 = dir2.stops[0].name;
-                    const end2 = dir2.stops[dir2.stops.length - 1].name;
-
+                    const [dir1, dir2] = group.directions;
+                    const [start1, end1] = [dir1.stops[0].name, dir1.stops[dir1.stops.length - 1].name];
+                    const [start2, end2] = [dir2.stops[0].name, dir2.stops[dir2.stops.length - 1].name];
                     if (start1 === end2 && end1 === start2) {
                         labelText = `${start1} <-> ${end1}`;
                     }
                 }
-                
-                // Fallback for loops or non-paired routes
                 if (!labelText) {
                     labelText = group.directions.map(d => d.direction_name).join(' / ');
                 }
-                label.textContent = labelText;
 
                 const routeControl = document.createElement('div');
-                routeControl.appendChild(checkbox);
-                routeControl.appendChild(label);
+                routeControl.style.display = 'flex';
+                routeControl.style.alignItems = 'center';
+                routeControl.style.padding = '5px 0';
+
+                const visibilityToggle = document.createElement('i');
+                visibilityToggle.className = 'fas fa-eye';
+                visibilityToggle.style.cursor = 'pointer';
+                visibilityToggle.style.marginRight = '10px';
+                visibilityToggle.style.width = '20px';
+                visibilityToggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isVisible = visibilityToggle.classList.contains('fa-eye');
+                    groupPolylines.forEach(p => {
+                        if (isVisible) {
+                            if (p && map.hasLayer(p)) map.removeLayer(p);
+                        } else {
+                            if (p && !map.hasLayer(p)) map.addLayer(p);
+                        }
+                    });
+                    visibilityToggle.classList.toggle('fa-eye');
+                    visibilityToggle.classList.toggle('fa-eye-slash');
+                });
+
+                const routeName = document.createElement('span');
+                routeName.textContent = labelText;
+
+                const groupStopList = document.createElement('ul');
+                groupStopList.className = 'stop-list';
+                groupStopList.style.display = 'none';
+                groupStopList.style.paddingLeft = '30px';
+
+                group.directions.forEach(direction => {
+                    const dirHeader = document.createElement('li');
+                    dirHeader.innerHTML = `<b>${direction.direction_name}</b>`;
+                    groupStopList.appendChild(dirHeader);
+                    direction.stops.forEach(stop => {
+                        const stopLi = document.createElement('li');
+                        stopLi.textContent = stop.name;
+                        stopLi.style.paddingLeft = '15px';
+                        groupStopList.appendChild(stopLi);
+                    });
+                });
+
+                const routeContainer = document.createElement('div');
+                routeContainer.appendChild(routeName);
+                routeContainer.appendChild(groupStopList);
+                routeContainer.style.cursor = 'pointer';
+                routeContainer.addEventListener('click', () => {
+                    const isCollapsed = groupStopList.style.display === 'none';
+                    groupStopList.style.display = isCollapsed ? 'block' : 'none';
+                });
+
+                routeControl.appendChild(visibilityToggle);
+                routeControl.appendChild(routeContainer);
                 routeSelectionContainer.appendChild(routeControl);
             });
 
@@ -228,7 +251,6 @@ function displayRoute(lineId) {
                 });
             });
 
-            // Populate the stops container
             const stopsContainer = document.getElementById('stops-container');
             stopsContainer.innerHTML = `<h3>${data.line}</h3><button id="back-to-lines">Back</button>`;
             stopsContainer.appendChild(routeSelectionContainer);
@@ -237,34 +259,13 @@ function displayRoute(lineId) {
                 document.getElementById('line-selection-container').style.display = 'block';
                 selectedLine = null;
                 document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
-                routePolylines.forEach(polyline => map.removeLayer(polyline));
+                routePolylines.forEach(polyline => { if (polyline) map.removeLayer(polyline); });
                 routePolylines = [];
                 stopMarkers.forEach(marker => marker.remove());
                 stopMarkers = [];
                 updateVehicleMarkers();
             });
 
-            data.directions.forEach(direction => {
-                const directionEl = document.createElement('div');
-                directionEl.className = 'direction';
-                
-                const header = document.createElement('h4');
-                header.textContent = direction.direction_name;
-                directionEl.appendChild(header);
-
-                const stopList = document.createElement('ul');
-                stopList.className = 'stop-list';
-                direction.stops.forEach(stop => {
-                    const stopLi = document.createElement('li');
-                    stopLi.textContent = stop.name;
-                    stopList.appendChild(stopLi);
-                });
-                directionEl.appendChild(stopList);
-
-                stopsContainer.appendChild(directionEl);
-            });
-
-            // Hide line selection and show stops container
             document.getElementById('line-selection-container').style.display = 'none';
             stopsContainer.style.display = 'block';
         })
