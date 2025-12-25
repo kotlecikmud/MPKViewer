@@ -31,6 +31,103 @@
             margin: 0;
             font-size: 1.5em;
         }
+        .header .version {
+            font-size: 0.8em;
+            color: #ccc;
+            margin-left: 10px;
+        }
+        .nav-bar {
+            background-color: #444;
+            padding: 10px 20px;
+            z-index: 1001;
+            display: flex;
+            gap: 15px;
+        }
+        .nav-bar a, .nav-bar .dropdown {
+            color: white;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .nav-bar a:hover, .nav-bar .dropdown:hover {
+            background-color: #555;
+        }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #333;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .dropdown-content a {
+            color: white;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+        .dropdown-content a:hover {
+            background-color: #555;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        .footer {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 15px 20px;
+            z-index: 1001;
+        }
+        .footer a {
+            color: #4dabf7;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-content img.qr-code {
+            display: block;
+            margin: 15px auto;
+            width: 150px;
+            height: 150px;
+        }
         .controls button {
             background-color: #444;
             color: white;
@@ -83,7 +180,6 @@
             width: 100%;
             font-size: 1.2em;
         }
-        #left-sidebar { order: -1; }
 
         .line-list {
             list-style: none;
@@ -167,6 +263,7 @@
     <div class="header">
         <div class="title-container">
             <h1><i class="fa-solid fa-bus"></i> MPK Wrocław Live Map</h1>
+            <span class="version">v{{ version }}</span>
             <span id="last-updated" class="last-updated-time"></span>
         </div>
         <div class="controls">
@@ -176,16 +273,54 @@
             <button id="reset-view-btn"><i class="fa-solid fa-arrows-rotate"></i> Reset</button>
         </div>
     </div>
-    <div class="main-container">
-        <div id="left-sidebar" class="sidebar">
-            <button id="toggle-left-sidebar" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
-            <div class="sidebar-content">
-                <h4>About</h4>
-                <p>This map displays real-time vehicle positions from MPK Wrocław.</p>
-                <p>Select a line from the right sidebar to see its route and stops.</p>
+    <div class="nav-bar">
+        <a href="/">Main</a>
+        <div class="dropdown">
+            <a href="#" class="dropbtn">All Routes</a>
+            <div class="dropdown-content">
+                <div id="all-buses-list">
+                    <h4>Buses</h4>
+                    {% for bus in buses %}
+                        <a href="#" onclick="selectLine('{{ bus }}')">{{ bus }}</a>
+                    {% endfor %}
+                </div>
+                <div id="all-trams-list">
+                    <h4>Trams</h4>
+                    {% for tram in trams %}
+                        <a href="#" onclick="selectLine('{{ tram }}')">{{ tram }}</a>
+                    {% endfor %}
+                </div>
             </div>
         </div>
+        <a href="#" id="how-to-use-btn" data-modal="how-to-use-modal">How to Use</a>
+        <a href="#" id="about-btn" data-modal="about-modal">About</a>
+    </div>
 
+    <div id="how-to-use-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" data-modal="how-to-use-modal">&times;</span>
+            <h2>How to Use This Map</h2>
+            <p><strong>Selecting a Line:</strong> Click on a bus or tram line from the right sidebar or the 'All Routes' dropdown to view its route and stops.</p>
+            <p><strong>Viewing Stops:</strong> Once a line is selected, its stops will be displayed in the right sidebar. Click on a stop to center the map on it.</p>
+            <p><strong>Live Vehicle Positions:</strong> Vehicles are updated in real-time. The timestamp of the last update is shown in the header.</p>
+            <p><strong>Map Views:</strong> Switch between Street and Satellite views using the buttons in the top right.</p>
+            <p><strong>Reset View:</strong> The 'Reset' button returns the map to its default position and zoom level.</p>
+        </div>
+    </div>
+
+    <div id="about-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" data-modal="about-modal">&times;</span>
+            <h2>About MPK Wrocław Live Map</h2>
+            <p>This website provides a live map of public transport in Wrocław, displaying real-time vehicle positions.</p>
+            <p><strong>Version:</strong> {{ version }}</p>
+            <p><strong>Author:</strong> {{ author_name }}</p>
+            <p>If you need help or have any questions, please contact me under this email address.</p>
+            <img src="data:image/png;base64,{{ qr_code }}" alt="Contact QR Code" class="qr-code">
+        </div>
+    </div>
+
+    <div class="main-container">
         <div id="map"></div>
 
         <div id="right-sidebar" class="sidebar open">
@@ -216,8 +351,33 @@
         </div>
     </div>
 
+    <div class="footer">
+        <p>Created by {{ author_name }} | <a href="mailto:{{ author_email }}">Contact</a> | <a href="{{ github_repo }}" target="_blank">GitHub Repository</a></p>
+    </div>
+
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script>
+        // Modal handling
+        document.querySelectorAll('.nav-bar a[data-modal]').forEach(btn => {
+            btn.onclick = function() {
+                const modalId = this.getAttribute('data-modal');
+                document.getElementById(modalId).style.display = "block";
+            }
+        });
+
+        document.querySelectorAll('.close-btn').forEach(span => {
+            span.onclick = function() {
+                const modalId = this.getAttribute('data-modal');
+                document.getElementById(modalId).style.display = "none";
+            }
+        });
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = "none";
+            }
+        }
+
         document.querySelectorAll('.list-toggle').forEach(header => {
             header.addEventListener('click', () => {
                 const target = document.querySelector(header.dataset.target);

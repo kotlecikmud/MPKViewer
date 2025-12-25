@@ -287,9 +287,6 @@ function displayRoute(lineId) {
 
 
 // --- Sidebar Toggle ---
-document.getElementById('toggle-left-sidebar').addEventListener('click', () => {
-    document.getElementById('left-sidebar').classList.toggle('closed');
-});
 document.getElementById('toggle-right-sidebar').addEventListener('click', () => {
     document.getElementById('right-sidebar').classList.toggle('closed');
 });

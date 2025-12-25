@@ -4,9 +4,20 @@ import json
 import os
 from datetime import datetime
 from pytz import timezone
+import qrcode
+import base64
+from io import BytesIO
  
 app = Flask(__name__)
 client = MpykClient()
+
+# App version
+APP_VERSION = "00.01.00.00b"
+
+# Author details
+AUTHOR_NAME = "Filip Pawłowski"
+AUTHOR_EMAIL = "filippawlowski2012@gmail.com"
+GITHUB_REPO = "https://github.com/kotlecikmud/MPKViewer"
 
 # Load route data from JSON file
 routes_data = {}
@@ -21,7 +32,36 @@ except json.JSONDecodeError:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Sort the line numbers naturally (e.g., '2', '10', '100')
+    sorted_lines = sorted(routes_data.keys(), key=lambda x: int(''.join(filter(str.isdigit, x))) if any(char.isdigit() for char in x) else float('inf'))
+    
+    # Separate lines into buses and trams based on the top-level 'type' attribute
+    buses = [line for line in sorted_lines if routes_data.get(line, {}).get('type') == 'bus']
+    trams = [line for line in sorted_lines if routes_data.get(line, {}).get('type') == 'tram']
+    
+    # Generate QR code for email
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(f"mailto:{AUTHOR_EMAIL}")
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    
+    return render_template('index.html', 
+                           version=APP_VERSION,
+                           author_name=AUTHOR_NAME,
+                           author_email=AUTHOR_EMAIL,
+                           github_repo=GITHUB_REPO,
+                           buses=buses,
+                           trams=trams,
+                           qr_code=img_str)
 
 @app.route('/api/vehicles')
 def get_vehicles():
