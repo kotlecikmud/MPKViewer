@@ -25,46 +25,63 @@ def get_graph():
     G_combined = nx.compose(G_drive, G_tram)
     return G_combined, G_drive
 
-def calculate_paths(G_combined, G_drive, routes_data):
-    """Calculates and adds realistic paths to the routes data."""
-    for line, data in tqdm(routes_data.items(), desc=f"Processing line ({line})"):
-        for direction in data.get("directions", []):
-            stops = direction.get("stops", [])
-            path_coordinates = []
-            
-            if stops and "lat" in stops[0] and "lon" in stops[0]:
-                path_coordinates.append([stops[0]["lat"], stops[0]["lon"]])
+    def calculate_paths(G_combined, G_drive, routes_data):
+        """Calculates and adds realistic paths to the routes data."""
+        with tqdm(routes_data.items(), desc="Processing lines") as pbar:
+            for line, data in pbar:
+                pbar.set_description(f"Processing line ({line})")
 
-            for i in range(len(stops) - 1):
-                start_stop = stops[i]
-                end_stop = stops[i+1]
+                for direction in data.get("directions", []):
+                    stops = direction.get("stops", [])
+                    path_coordinates = []
 
-                if "lat" not in start_stop or "lon" not in start_stop or "lat" not in end_stop or "lon" not in end_stop:
-                    # This case is handled by skipping, but we can log it if needed
-                    continue
+                    if stops and "lat" in stops[0] and "lon" in stops[0]:
+                        path_coordinates.append([stops[0]["lat"], stops[0]["lon"]])
 
-                start_point = (start_stop["lat"], start_stop["lon"])
-                end_point = (end_stop["lat"], end_stop["lon"])
+                    for i in range(len(stops) - 1):
+                        start_stop = stops[i]
+                        end_stop = stops[i + 1]
 
-                try:
-                    start_node = ox.nearest_nodes(G_drive, start_point[1], start_point[0])
-                    end_node = ox.nearest_nodes(G_drive, end_point[1], end_point[0])
-                    
-                    route = nx.shortest_path(G_combined, start_node, end_node, weight='length')
-                    
-                    route_coords = [[G_combined.nodes[node]['y'], G_combined.nodes[node]['x']] for node in route]
-                    
-                    path_coordinates.extend(route_coords[1:])
+                        if (
+                            "lat" not in start_stop or "lon" not in start_stop
+                            or "lat" not in end_stop or "lon" not in end_stop
+                        ):
+                            continue
 
-                except (nx.NetworkXNoPath, ValueError):
-                    # If no path is found, connect with a straight line
-                    path_coordinates.append([end_stop["lat"], end_stop["lon"]])
+                        start_point = (start_stop["lat"], start_stop["lon"])
+                        end_point = (end_stop["lat"], end_stop["lon"])
 
-            direction["path"] = path_coordinates
-        
-        # Save after processing each line
-        save_routes(routes_data)
-    return routes_data
+                        try:
+                            start_node = ox.nearest_nodes(
+                                G_drive, start_point[1], start_point[0]
+                            )
+                            end_node = ox.nearest_nodes(
+                                G_drive, end_point[1], end_point[0]
+                            )
+
+                            route = nx.shortest_path(
+                                G_combined, start_node, end_node, weight="length"
+                            )
+
+                            route_coords = [
+                                [G_combined.nodes[node]["y"], G_combined.nodes[node]["x"]]
+                                for node in route
+                            ]
+
+                            path_coordinates.extend(route_coords[1:])
+
+                        except (nx.NetworkXNoPath, ValueError):
+                            # fallback: linia prosta
+                            path_coordinates.append(
+                                [end_stop["lat"], end_stop["lon"]]
+                            )
+
+                    direction["path"] = path_coordinates
+
+                # Save after processing each line
+                save_routes(routes_data)
+
+        return routes_data
 
 def main():
     """Main function to run the path solver."""
