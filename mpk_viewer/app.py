@@ -2,9 +2,6 @@ from flask import Flask, render_template, jsonify
 from mpyk import MpykClient
 import json
 import os
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
-import time
 
 app = Flask(__name__)
 client = MpykClient()
@@ -19,11 +16,6 @@ except FileNotFoundError:
     print(f"Error: The file {routes_path} was not found.")
 except json.JSONDecodeError:
     print(f"Error: Could not decode JSON from {routes_path}.")
-
-# Geocoding setup
-geolocator = Nominatim(user_agent="mpk_wroclaw_map_app_jules_v7")
-geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1, error_wait_seconds=5)
-geocoding_cache = {}
 
 @app.route('/')
 def index():
@@ -64,12 +56,11 @@ def get_all_routes():
 
 @app.route('/api/routes/<line>')
 def get_route(line):
-    """Returns the specific route data for a given line, with geocoded stops."""
+    """Returns the specific route data for a given line, using pre-existing coordinates."""
     line_data = routes_data.get(line)
     if not line_data:
         return jsonify({"error": "Line not found"}), 404
 
-    # Check if the directions are empty
     if not line_data.get("directions"):
         return jsonify({
             "line": line,
@@ -77,41 +68,26 @@ def get_route(line):
             "source": line_data.get("source")
         })
 
-    geocoded_directions = []
+    processed_directions = []
     for direction in line_data.get("directions", []):
-        geocoded_stops = []
+        processed_stops = []
         for stop in direction.get("stops", []):
             cleaned_name = stop["name"].replace("NŻPrzystanek na życzenie", "").strip()
-            cache_key = f"{cleaned_name}@{stop['street']}"
-
-            if cache_key in geocoding_cache:
-                lat, lon = geocoding_cache[cache_key]
-            else:
-                query = f"{cleaned_name}, {stop['street']}, Wrocław, Poland"
-                try:
-                    location = geocode(query)
-                    if location:
-                        lat, lon = location.latitude, location.longitude
-                    else:
-                        lat, lon = None, None
-                except Exception as e:
-                    print(f"Geocoding error for '{query}': {e}")
-                    lat, lon = None, None
-                geocoding_cache[cache_key] = (lat, lon)
             
-            geocoded_stops.append({
+            processed_stop = {
                 "name": cleaned_name,
-                "street": stop["street"],
-                "lat": lat,
-                "lon": lon
-            })
+                "street": stop.get("street"),
+                "lat": stop.get("lat"),
+                "lon": stop.get("lon")
+            }
+            processed_stops.append(processed_stop)
 
-        geocoded_directions.append({
+        processed_directions.append({
             "direction_name": direction["direction_name"],
-            "stops": geocoded_stops
+            "stops": processed_stops
         })
 
-    return jsonify({"line": line, "directions": geocoded_directions})
+    return jsonify({"line": line, "directions": processed_directions})
 
 
 if __name__ == '__main__':

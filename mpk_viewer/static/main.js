@@ -2,7 +2,7 @@ const map = L.map('map').setView([51.1079, 17.0385], 13);
 let vehicleMarkers = [];
 let currentBaseLayer;
 let selectedLine = null;
-let routePolyline = null;
+let routePolylines = [];
 let stopMarkers = [];
 
 // --- Map Layers ---
@@ -116,20 +116,55 @@ function displayRoute(lineId) {
                 return;
             }
 
-            if (routePolyline) {
-                map.removeLayer(routePolyline);
-            }
+            routePolylines.forEach(polyline => map.removeLayer(polyline));
+            routePolylines = [];
 
             stopMarkers.forEach(marker => marker.remove());
             stopMarkers = [];
+            
+            const colors = ['blue', 'red', 'green', 'purple', 'orange', 'black'];
+            let colorIndex = 0;
 
-            const routeCoordinates = data.directions.flatMap(direction => 
-                direction.stops.filter(stop => stop.lat && stop.lon).map(stop => [stop.lat, stop.lon])
-            );
+            const routeSelectionContainer = document.getElementById('route-selection-container');
+            routeSelectionContainer.innerHTML = '<h4>Routes</h4>';
 
-            if (routeCoordinates.length > 0) {
-                routePolyline = L.polyline(routeCoordinates, { color: 'blue' }).addTo(map);
-                map.fitBounds(routePolyline.getBounds());
+            data.directions.forEach((direction, index) => {
+                const routeCoordinates = direction.stops
+                    .filter(stop => stop.lat && stop.lon)
+                    .map(stop => [stop.lat, stop.lon]);
+
+                let polyline;
+                if (routeCoordinates.length > 0) {
+                    polyline = L.polyline(routeCoordinates, { color: colors[colorIndex % colors.length] }).addTo(map);
+                    routePolylines.push(polyline);
+                    colorIndex++;
+                }
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `route-${index}`;
+                checkbox.checked = true;
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        if (polyline) map.addLayer(polyline);
+                    } else {
+                        if (polyline) map.removeLayer(polyline);
+                    }
+                });
+
+                const label = document.createElement('label');
+                label.htmlFor = `route-${index}`;
+                label.textContent = direction.direction_name;
+                
+                const routeControl = document.createElement('div');
+                routeControl.appendChild(checkbox);
+                routeControl.appendChild(label);
+                routeSelectionContainer.appendChild(routeControl);
+            });
+
+            if (routePolylines.length > 0) {
+                const group = new L.featureGroup(routePolylines);
+                map.fitBounds(group.getBounds());
             }
 
             data.directions.forEach(direction => {
@@ -151,7 +186,20 @@ function displayRoute(lineId) {
 
             // Populate the stops container
             const stopsContainer = document.getElementById('stops-container');
-            stopsContainer.innerHTML = `<h3>${data.line}</h3>`;
+            stopsContainer.innerHTML = `<h3>${data.line}</h3><button id="back-to-lines">Back</button>`;
+            stopsContainer.appendChild(routeSelectionContainer);
+            document.getElementById('back-to-lines').addEventListener('click', () => {
+                document.getElementById('stops-container').style.display = 'none';
+                document.getElementById('line-selection-container').style.display = 'block';
+                selectedLine = null;
+                document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
+                routePolylines.forEach(polyline => map.removeLayer(polyline));
+                routePolylines = [];
+                stopMarkers.forEach(marker => marker.remove());
+                stopMarkers = [];
+                updateVehicleMarkers();
+            });
+
             data.directions.forEach(direction => {
                 const directionEl = document.createElement('div');
                 directionEl.className = 'direction';
@@ -205,10 +253,8 @@ document.getElementById('reset-view-btn').addEventListener('click', () => {
     selectedLine = null;
     document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
     
-    if (routePolyline) {
-        map.removeLayer(routePolyline);
-        routePolyline = null;
-    }
+    routePolylines.forEach(polyline => map.removeLayer(polyline));
+    routePolylines = [];
 
     stopMarkers.forEach(marker => marker.remove());
     stopMarkers = [];

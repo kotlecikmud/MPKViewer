@@ -150,6 +150,16 @@
         .list-toggle.collapsed .fa-chevron-down {
             transform: rotate(-90deg);
         }
+        #back-to-lines {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -194,6 +204,7 @@
                     </div>
                 </div>
                 <div id="stops-container" style="display: none;">
+                    <div id="route-selection-container"></div>
                     <!-- Stop info will be dynamically populated here -->
                 </div>
             </div>
