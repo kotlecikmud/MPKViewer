@@ -2,6 +2,8 @@ const map = L.map('map').setView([51.1079, 17.0385], 13);
 let vehicleMarkers = [];
 let currentBaseLayer;
 let selectedLine = null;
+let routePolyline = null;
+let stopMarkers = [];
 
 // --- Map Layers ---
 const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -71,7 +73,7 @@ function fetchAndDisplayLines() {
                 li.addEventListener('click', () => {
                     document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
                     li.classList.add('selected');
-                    fetchAndDisplayStops(line.line);
+                    displayRoute(line.line);
                 });
                 busList.appendChild(li);
             });
@@ -83,7 +85,7 @@ function fetchAndDisplayLines() {
                 li.addEventListener('click', () => {
                     document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
                     li.classList.add('selected');
-                    fetchAndDisplayStops(line.line);
+                    displayRoute(line.line);
                 });
                 tramList.appendChild(li);
             });
@@ -91,52 +93,88 @@ function fetchAndDisplayLines() {
 }
 
 
-function fetchAndDisplayStops(lineId) {
+function displayRoute(lineId) {
+    selectedLine = lineId;
+    updateVehicleMarkers();
+
     fetch(`/api/routes/${lineId}`)
-        .then(response => response.json())
-        .then(data => {
-            const stopsContainer = document.getElementById('stops-container');
-            stopsContainer.innerHTML = '<h3>Directions & Stops</h3>';
-
-            if (data && data.directions) {
-                data.directions.forEach(direction => {
-                    const directionEl = document.createElement('div');
-                    directionEl.className = 'direction';
-                    
-                    const header = document.createElement('h4');
-                    header.textContent = direction.direction;
-                    header.addEventListener('click', () => {
-                        // Logic to show stops for this direction
-                        selectedLine = lineId;
-                        updateVehicleMarkers();
-                        
-                        // Collapse other direction lists
-                        document.querySelectorAll('.stop-list').forEach(list => list.style.display = 'none');
-                        // Expand this direction's list
-                        const stopList = directionEl.querySelector('.stop-list');
-                        stopList.style.display = 'block';
-                    });
-                    directionEl.appendChild(header);
-
-                    const stopList = document.createElement('ul');
-                    stopList.className = 'stop-list';
-                    stopList.style.display = 'none'; // Initially hidden
-                    direction.stops.forEach(stop => {
-                        const stopLi = document.createElement('li');
-                        stopLi.textContent = stop;
-                        stopList.appendChild(stopLi);
-                    });
-                    directionEl.appendChild(stopList);
-
-                    stopsContainer.appendChild(directionEl);
-                });
-            } else {
-                stopsContainer.innerHTML += '<p>No stop information available.</p>';
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-            document.getElementById('right-sidebar').classList.add('open');
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                console.error("Error fetching route data:", data.error);
+                alert(`Error: ${data.error}`);
+                return;
+            }
+
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+            }
+
+            stopMarkers.forEach(marker => marker.remove());
+            stopMarkers = [];
+
+            const routeCoordinates = data.directions.flatMap(direction => 
+                direction.stops.filter(stop => stop.lat && stop.lon).map(stop => [stop.lat, stop.lon])
+            );
+
+            if (routeCoordinates.length > 0) {
+                routePolyline = L.polyline(routeCoordinates, { color: 'blue' }).addTo(map);
+                map.fitBounds(routePolyline.getBounds());
+            }
+
+            data.directions.forEach(direction => {
+                direction.stops.forEach(stop => {
+                    if (stop.lat && stop.lon) {
+                        const marker = L.circleMarker([stop.lat, stop.lon], {
+                            radius: 5,
+                            fillColor: '#ffffff',
+                            color: '#000',
+                            weight: 1,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(map);
+                        marker.bindPopup(`<b>${stop.name}</b><br>${stop.street}`);
+                        stopMarkers.push(marker);
+                    }
+                });
+            });
+
+            // Populate the stops container
+            const stopsContainer = document.getElementById('stops-container');
+            stopsContainer.innerHTML = `<h3>${data.line}</h3>`;
+            data.directions.forEach(direction => {
+                const directionEl = document.createElement('div');
+                directionEl.className = 'direction';
+                
+                const header = document.createElement('h4');
+                header.textContent = direction.direction_name;
+                directionEl.appendChild(header);
+
+                const stopList = document.createElement('ul');
+                stopList.className = 'stop-list';
+                direction.stops.forEach(stop => {
+                    const stopLi = document.createElement('li');
+                    stopLi.textContent = stop.name;
+                    stopList.appendChild(stopLi);
+                });
+                directionEl.appendChild(stopList);
+
+                stopsContainer.appendChild(directionEl);
+            });
+
+            // Hide line selection and show stops container
+            document.getElementById('line-selection-container').style.display = 'none';
+            stopsContainer.style.display = 'block';
+        })
+        .catch(error => {
+            console.error("Error fetching route data:", error);
         });
 }
-
 
 
 // --- Sidebar Toggle ---
@@ -161,7 +199,19 @@ document.getElementById('satellite-view-btn').addEventListener('click', () => {
 document.getElementById('reset-view-btn').addEventListener('click', () => {
     selectedLine = null;
     document.querySelectorAll('#bus-list li, #tram-list li').forEach(item => item.classList.remove('selected'));
-    document.getElementById('right-sidebar').classList.remove('open');
+    
+    if (routePolyline) {
+        map.removeLayer(routePolyline);
+        routePolyline = null;
+    }
+
+    stopMarkers.forEach(marker => marker.remove());
+    stopMarkers = [];
+
+    // Hide stops and show line selection
+    document.getElementById('stops-container').style.display = 'none';
+    document.getElementById('line-selection-container').style.display = 'block';
+
     updateVehicleMarkers(); // Update to show all vehicles
 });
 

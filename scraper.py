@@ -28,7 +28,7 @@ def get_line_links():
     def scrape_section(header_text, line_type):
         header = soup.find('h2', class_='titleSection', string=header_text)
         if header:
-            list_container = header.find_next_sibling('ul', class_='busTimetableList')
+            list_container = header.parent.find_next_sibling('ul', class_='busTimetableList')
             if list_container:
                 links = list_container.find_all('a', href=re.compile(r"/komunikacja/linia-"))
                 for a in links:

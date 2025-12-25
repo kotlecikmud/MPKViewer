@@ -83,21 +83,23 @@
             font-size: 1.2em;
         }
         #left-sidebar { order: -1; }
+
         .line-list {
             list-style: none;
-            padding: 0;
+            padding: 10px 0;
             margin: 0;
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
             gap: 5px;
         }
         .line-list li {
             background-color: #ddd;
-            padding: 5px 10px;
-            border-radius: 15px;
+            padding: 8px;
+            border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.2s;
             font-weight: bold;
+            text-align: center;
         }
         .line-list li.selected { background-color: #0078ff; color: white; }
         #bus-list li:hover { background-color: #ff8c00; }
@@ -105,6 +107,7 @@
         
         #right-sidebar:not(.open) { display: none; }
         #right-sidebar.open { display: flex; }
+
         #stops-container h3, #stops-container h4 {
             margin-top: 0;
             background-color: #e9e9e9;
@@ -127,6 +130,26 @@
             font-size: 0.8em;
             float: right;
         }
+
+        .list-toggle {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .list-toggle h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .list-toggle .fa-chevron-down {
+            transition: transform 0.3s ease;
+        }
+        .list-toggle.collapsed .fa-chevron-down {
+            transform: rotate(-90deg);
+        }
     </style>
 </head>
 <body>
@@ -142,24 +165,53 @@
         <div id="left-sidebar" class="sidebar">
             <button id="toggle-left-sidebar" class="sidebar-toggle"><i class="fa-solid fa-bars"></i></button>
             <div class="sidebar-content">
-                <h2><i class="fa-solid fa-bus"></i> Buses</h2>
-                <ul id="bus-list" class="line-list"></ul>
-                <h2><i class="fa-solid fa-train-tram"></i> Trams</h2>
-                <ul id="tram-list" class="line-list"></ul>
+                <h4>About</h4>
+                <p>This map displays real-time vehicle positions from MPK Wrocław.</p>
+                <p>Select a line from the right sidebar to see its route and stops.</p>
             </div>
         </div>
 
         <div id="map"></div>
 
-        <div id="right-sidebar" class="sidebar">
-            <button id="toggle-right-sidebar" class="sidebar-toggle"><i class="fa-solid fa-map-pin"></i></button>
-            <div class="sidebar-content" id="stops-container">
-                <h3>Directions & Stops</h3>
-                <p>Select a line to see stops.</p>
+        <div id="right-sidebar" class="sidebar open">
+            <button id="toggle-right-sidebar" class="sidebar-toggle"><i class="fa-solid fa-list-ul"></i></button>
+            <div class="sidebar-content">
+                <div id="line-selection-container">
+                    <div class="list-toggle" data-target="#bus-list-wrapper">
+                        <h2><i class="fa-solid fa-bus"></i> Buses</h2>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div id="bus-list-wrapper">
+                        <ul id="bus-list" class="line-list"></ul>
+                    </div>
+
+                    <div class="list-toggle" data-target="#tram-list-wrapper">
+                        <h2><i class="fa-solid fa-train-tram"></i> Trams</h2>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div id="tram-list-wrapper">
+                        <ul id="tram-list" class="line-list"></ul>
+                    </div>
+                </div>
+                <div id="stops-container" style="display: none;">
+                    <!-- Stop info will be dynamically populated here -->
+                </div>
             </div>
         </div>
     </div>
 
     <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script>
+        document.querySelectorAll('.list-toggle').forEach(header => {
+            header.addEventListener('click', () => {
+                const target = document.querySelector(header.dataset.target);
+                if (target) {
+                    const isCollapsed = target.style.display === 'none';
+                    target.style.display = isCollapsed ? 'block' : 'none';
+                    header.classList.toggle('collapsed', !isCollapsed);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
