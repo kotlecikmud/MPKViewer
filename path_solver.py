@@ -3,14 +3,11 @@ import osmnx as ox
 import json
 import networkx as nx
 from tqdm import tqdm
-import os
 
 def save_routes(routes_data):
     """Saves the routes data to a JSON file."""
-    with open("mpk_viewer/data/routes_path_solved.json", "w", encoding='utf-8') as f:
+    with open("mpk_viewer/data/routes_solved.json", "w", encoding='utf-8') as f:
         json.dump(routes_data, f, indent=2, ensure_ascii=False)
-        f.flush()
-        os.fsync(f.fileno())
 
 def get_graph():
     """Fetches and combines the street and tram networks for Wroclaw."""
@@ -30,13 +27,11 @@ def get_graph():
 
 def calculate_paths(G_combined, G_drive, routes_data):
     """Calculates and adds realistic paths to the routes data."""
-    for line, data in routes_data.items():
-        print(f"Processing line: {line}")
+    for line, data in tqdm(routes_data.items(), desc=f"Processing line ({line})"):
         for direction in data.get("directions", []):
             stops = direction.get("stops", [])
             path_coordinates = []
             
-            # Add the first stop's coordinates to the beginning of the path
             if stops and "lat" in stops[0] and "lon" in stops[0]:
                 path_coordinates.append([stops[0]["lat"], stops[0]["lon"]])
 
@@ -45,32 +40,30 @@ def calculate_paths(G_combined, G_drive, routes_data):
                 end_stop = stops[i+1]
 
                 if "lat" not in start_stop or "lon" not in start_stop or "lat" not in end_stop or "lon" not in end_stop:
-                    print(f"  Skipping segment for line {line} due to missing coordinates.")
+                    # This case is handled by skipping, but we can log it if needed
                     continue
 
                 start_point = (start_stop["lat"], start_stop["lon"])
                 end_point = (end_stop["lat"], end_stop["lon"])
 
                 try:
-                    # Find the nearest nodes on the drive graph to ensure connectivity
                     start_node = ox.nearest_nodes(G_drive, start_point[1], start_point[0])
                     end_node = ox.nearest_nodes(G_drive, end_point[1], end_point[0])
                     
-                    # Calculate the shortest path using the combined graph
                     route = nx.shortest_path(G_combined, start_node, end_node, weight='length')
                     
-                    # Get the coordinates for the path
                     route_coords = [[G_combined.nodes[node]['y'], G_combined.nodes[node]['x']] for node in route]
                     
-                    # Add coordinates, skipping the first point to avoid duplication
                     path_coordinates.extend(route_coords[1:])
 
-                except (nx.NetworkXNoPath, ValueError) as e:
-                    print(f"  Could not find path for line {line} between {start_stop['name']} and {end_stop['name']}: {e}")
-                    # If no path, just connect with a straight line
+                except (nx.NetworkXNoPath, ValueError):
+                    # If no path is found, connect with a straight line
                     path_coordinates.append([end_stop["lat"], end_stop["lon"]])
 
             direction["path"] = path_coordinates
+        
+        # Save after processing each line
+        save_routes(routes_data)
     return routes_data
 
 def main():
@@ -81,11 +74,8 @@ def main():
     
     G_combined, G_drive = get_graph()
     print("Calculating paths for all routes...")
-    updated_routes = calculate_paths(G_combined, G_drive, routes_data)
+    calculate_paths(G_combined, G_drive, routes_data)
     
-    print("Saving updated routes data...")
-    with open("mpk_viewer/data/routes_path_solved.json", "w", encoding='utf-8') as f:
-        json.dump(updated_routes, f, indent=2, ensure_ascii=False)
     print("Done.")
 
 if __name__ == "__main__":
