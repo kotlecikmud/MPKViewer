@@ -17,9 +17,9 @@ def get_graph():
     print("Combining networks...")
     # Combine the two graphs
     G_combined = nx.compose(G_drive, G_tram)
-    return G_combined
+    return G_combined, G_drive
 
-def calculate_paths(graph, routes_data):
+def calculate_paths(G_combined, G_drive, routes_data):
     """Calculates and adds realistic paths to the routes data."""
     for line, data in routes_data.items():
         print(f"Processing line: {line}")
@@ -43,14 +43,15 @@ def calculate_paths(graph, routes_data):
                 end_point = (end_stop["lat"], end_stop["lon"])
 
                 try:
-                    start_node = ox.nearest_nodes(graph, start_point[1], start_point[0])
-                    end_node = ox.nearest_nodes(graph, end_point[1], end_point[0])
+                    # Find the nearest nodes on the drive graph to ensure connectivity
+                    start_node = ox.nearest_nodes(G_drive, start_point[1], start_point[0])
+                    end_node = ox.nearest_nodes(G_drive, end_point[1], end_point[0])
                     
-                    # Calculate the shortest path
-                    route = nx.shortest_path(graph, start_node, end_node, weight='length')
+                    # Calculate the shortest path using the combined graph
+                    route = nx.shortest_path(G_combined, start_node, end_node, weight='length')
                     
                     # Get the coordinates for the path
-                    route_coords = [[graph.nodes[node]['y'], graph.nodes[node]['x']] for node in route]
+                    route_coords = [[G_combined.nodes[node]['y'], G_combined.nodes[node]['x']] for node in route]
                     
                     # Add coordinates, skipping the first point to avoid duplication
                     path_coordinates.extend(route_coords[1:])
@@ -69,9 +70,9 @@ def main():
     with open("mpk_viewer/data/routes.json", "r", encoding='utf-8') as f:
         routes_data = json.load(f)
     
-    graph = get_graph()
+    G_combined, G_drive = get_graph()
     print("Calculating paths for all routes...")
-    updated_routes = calculate_paths(graph, routes_data)
+    updated_routes = calculate_paths(G_combined, G_drive, routes_data)
     
     print("Saving updated routes data...")
     with open("mpk_viewer/data/routes.json", "w", encoding='utf-8') as f:
