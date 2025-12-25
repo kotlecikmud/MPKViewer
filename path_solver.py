@@ -2,6 +2,15 @@
 import osmnx as ox
 import json
 import networkx as nx
+from tqdm import tqdm
+import os
+
+def save_routes(routes_data):
+    """Saves the routes data to a JSON file."""
+    with open("mpk_viewer/data/routes_path_solved.json", "w", encoding='utf-8') as f:
+        json.dump(routes_data, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
 
 def get_graph():
     """Fetches and combines the street and tram networks for Wroclaw."""
@@ -75,7 +84,7 @@ def main():
     updated_routes = calculate_paths(G_combined, G_drive, routes_data)
     
     print("Saving updated routes data...")
-    with open("mpk_viewer/data/routes.json", "w", encoding='utf-8') as f:
+    with open("mpk_viewer/data/routes_path_solved.json", "w", encoding='utf-8') as f:
         json.dump(updated_routes, f, indent=2, ensure_ascii=False)
     print("Done.")
 
