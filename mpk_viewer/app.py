@@ -2,7 +2,9 @@ from flask import Flask, render_template, jsonify
 from mpyk import MpykClient
 import json
 import os
-
+from datetime import datetime
+from pytz import timezone
+ 
 app = Flask(__name__)
 client = MpykClient()
 
@@ -23,8 +25,13 @@ def index():
 
 @app.route('/api/vehicles')
 def get_vehicles():
-    """Returns live vehicle positions."""
+    """Returns live vehicle positions and the last update time."""
     positions = client.get_all_positions()
+    
+    # Get the current time in Europe/Warsaw timezone
+    tz = timezone('Europe/Warsaw')
+    last_update_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+
     vehicle_data = [
         {
             'lat': p.lat,
@@ -33,7 +40,11 @@ def get_vehicles():
             'type': p.kind
         } for p in positions
     ]
-    return jsonify(vehicle_data)
+    
+    return jsonify({
+        "vehicles": vehicle_data,
+        "last_update": last_update_time
+    })
 
 @app.route('/api/routes')
 def get_all_routes():
@@ -84,7 +95,8 @@ def get_route(line):
 
         processed_directions.append({
             "direction_name": direction["direction_name"],
-            "stops": processed_stops
+            "stops": processed_stops,
+            "path": direction.get("path", [])
         })
 
     return jsonify({"line": line, "directions": processed_directions})

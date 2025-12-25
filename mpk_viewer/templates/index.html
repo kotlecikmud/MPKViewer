@@ -60,7 +60,8 @@
             transition: width 0.3s;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow-y: auto;
+            height: 100vh;
         }
         .sidebar.closed {
             width: 40px;
@@ -164,10 +165,14 @@
 </head>
 <body>
     <div class="header">
-        <h1><i class="fa-solid fa-bus"></i> MPK Wrocław Live Map</h1>
+        <div class="title-container">
+            <h1><i class="fa-solid fa-bus"></i> MPK Wrocław Live Map</h1>
+            <span id="last-updated" class="last-updated-time"></span>
+        </div>
         <div class="controls">
             <button id="street-view-btn"><i class="fa-solid fa-road"></i> Street</button>
             <button id="satellite-view-btn"><i class="fa-solid fa-satellite"></i> Satellite</button>
+            <button id="toggle-theme-btn"><i class="fa-solid fa-moon"></i></button>
             <button id="reset-view-btn"><i class="fa-solid fa-arrows-rotate"></i> Reset</button>
         </div>
     </div>

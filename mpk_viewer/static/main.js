@@ -16,9 +16,18 @@ const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 });
 
-function setStreetViewTheme() {
+let isDarkMode = false;
+
+function setStreetViewTheme(forceTheme = null) {
     const hour = new Date().getHours();
-    const isNight = hour < 6 || hour >= 20;
+    let isNight;
+
+    if (forceTheme !== null) {
+        isNight = forceTheme === 'dark';
+    } else {
+        isNight = hour < 6 || hour >= 20;
+    }
+
     const targetLayer = isNight ? darkLayer : streetLayer;
     if (currentBaseLayer !== targetLayer) {
         if (currentBaseLayer) {
@@ -27,15 +36,21 @@ function setStreetViewTheme() {
         map.addLayer(targetLayer);
         currentBaseLayer = targetLayer;
     }
+    isDarkMode = isNight;
+}
+
+function toggleTheme() {
+    setStreetViewTheme(!isDarkMode ? 'dark' : 'light');
 }
 
 function updateVehicleMarkers() {
     fetch('/api/vehicles')
         .then(response => response.json())
         .then(data => {
+            document.getElementById('last-updated').textContent = `Last update: ${data.last_update}`;
             vehicleMarkers.forEach(marker => marker.remove());
             vehicleMarkers = [];
-            data.forEach(vehicle => {
+            data.vehicles.forEach(vehicle => {
                 if (selectedLine && vehicle.line !== selectedLine) {
                     return;
                 }
@@ -144,12 +159,8 @@ function displayRoute(lineId) {
             Object.values(routeGroups).forEach((group) => {
                 const groupPolylines = [];
                 group.directions.forEach(direction => {
-                    const routeCoordinates = direction.stops
-                        .filter(stop => stop.lat && stop.lon)
-                        .map(stop => [stop.lat, stop.lon]);
-
-                    if (routeCoordinates.length > 0) {
-                        const polyline = L.polyline(routeCoordinates, { color: colors[colorIndex % colors.length] });
+                    if (direction.path && direction.path.length > 0) {
+                        const polyline = L.polyline(direction.path, { color: colors[colorIndex % colors.length] });
                         groupPolylines.push(polyline);
                         routePolylines.push(polyline);
                         colorIndex++;
@@ -289,6 +300,8 @@ document.getElementById('street-view-btn').addEventListener('click', () => {
     if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
     setStreetViewTheme();
 });
+
+document.getElementById('toggle-theme-btn').addEventListener('click', toggleTheme);
 document.getElementById('satellite-view-btn').addEventListener('click', () => {
     if (currentBaseLayer) map.removeLayer(currentBaseLayer);
     currentBaseLayer = null; // We are no longer on a "base" layer
