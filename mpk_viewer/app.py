@@ -7,7 +7,20 @@ from pytz import timezone
 import qrcode
 import base64
 from io import BytesIO
- 
+import logging
+
+# --- Logging Setup ---
+# Create logs directory if it doesn't exist
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+# Logger for missing lines
+missing_lines_logger = logging.getLogger('missing_lines')
+missing_lines_logger.setLevel(logging.INFO)
+missing_lines_handler = logging.FileHandler('logs/missing_lines.log')
+missing_lines_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+missing_lines_logger.addHandler(missing_lines_handler)
+
 app = Flask(__name__)
 client = MpykClient()
 
@@ -68,6 +81,13 @@ def get_vehicles():
     """Returns live vehicle positions and the last update time."""
     positions = client.get_all_positions()
     
+    # Log missing lines
+    live_lines = {p.line for p in positions}
+    known_lines = set(routes_data.keys())
+    missing = live_lines - known_lines
+    for line in missing:
+        missing_lines_logger.info(f"Line '{line}' found in live data but not in routes.json")
+
     # Get the current time in Europe/Warsaw timezone
     tz = timezone('Europe/Warsaw')
     last_update_time = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
@@ -109,6 +129,40 @@ def get_all_routes():
 def get_route(line):
     """Returns the specific route data for a given line, using pre-existing coordinates."""
     line_data = routes_data.get(line)
+    
+    # --- Dynamic Logging for Route Traces ---
+    try:
+        # Create date-stamped directory
+        log_dir = os.path.join('logs', 'route_traces', datetime.now().strftime('%Y-%m-%d'))
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Configure a temporary logger
+        log_file = os.path.join(log_dir, f"line_{line}.log")
+        
+        logger_name = f"route_trace_{line}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        route_logger = logging.getLogger(logger_name)
+        route_logger.setLevel(logging.INFO)
+        
+        handler = logging.FileHandler(log_file, encoding='utf-8')
+        formatter = logging.Formatter('%(asctime)s - %(message)s')
+        handler.setFormatter(formatter)
+        
+        route_logger.addHandler(handler)
+        
+        route_logger.info(f"--- Route Trace for Line: {line} ---")
+        if line_data:
+            route_logger.info(json.dumps(line_data, indent=2, ensure_ascii=False))
+        else:
+            route_logger.info("Line not found in routes.json")
+        route_logger.info("--- End Trace ---")
+        
+        handler.close()
+        route_logger.removeHandler(handler)
+
+    except Exception as e:
+        app.logger.error(f"Failed to log route trace for line {line}: {e}")
+    # --- End of Logging ---
+
     if not line_data:
         return jsonify({"error": "Line not found"}), 404
 

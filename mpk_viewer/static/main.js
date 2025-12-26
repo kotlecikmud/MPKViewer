@@ -69,6 +69,9 @@ function updateVehicleMarkers() {
 }
 
 function fetchAndDisplayLines() {
+    const spinner = document.getElementById('loading-spinner');
+    spinner.style.display = 'inline-block';
+
     fetch('/api/routes')
         .then(response => response.json())
         .then(data => {
@@ -104,6 +107,9 @@ function fetchAndDisplayLines() {
                 });
                 tramList.appendChild(li);
             });
+        })
+        .finally(() => {
+            spinner.style.display = 'none';
         });
 }
 

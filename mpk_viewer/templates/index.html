@@ -157,8 +157,7 @@
             transition: width 0.3s;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
-            height: 100vh;
+            height: calc(100vh - 120px);
         }
         .sidebar.closed {
             width: 40px;
@@ -167,6 +166,7 @@
             overflow-y: auto;
             padding: 10px;
             flex-grow: 1;
+            height: 100%;
         }
         .sidebar.closed .sidebar-content {
             display: none;
@@ -263,6 +263,7 @@
     <div class="header">
         <div class="title-container">
             <h1><i class="fa-solid fa-bus"></i> MPK Wrocław Live Map</h1>
+            <i id="loading-spinner" class="fas fa-spinner fa-spin" style="display: none; margin-left: 10px;"></i>
             <span class="version">v{{ version }}</span>
             <span id="last-updated" class="last-updated-time"></span>
         </div>
@@ -315,6 +316,7 @@
             <p>This website provides a live map of public transport in Wrocław, displaying real-time vehicle positions.</p>
             <p><strong>Version:</strong> {{ version }}</p>
             <p><strong>Author:</strong> {{ author_name }}</p>
+            <p><strong>Repository:</strong> <a href="{{ github_repo }}" target="_blank">GitHub</a></p>
             <p>If you need help or have any questions, please contact me under this email address.</p>
             <img src="data:image/png;base64,{{ qr_code }}" alt="Contact QR Code" class="qr-code">
         </div>
