@@ -328,6 +328,87 @@ document.getElementById('reset-view-btn').addEventListener('click', () => {
 });
 
 
+// --- Logged Routes ---
+let loggedRoutePolylines = [];
+
+function clearLoggedRoutes() {
+    loggedRoutePolylines.forEach(polyline => map.removeLayer(polyline));
+    loggedRoutePolylines = [];
+}
+
+function fetchLoggedRoutes(date) {
+    fetch(`/api/logged_routes?date=${date}`)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('logged-lines-container');
+            container.innerHTML = ''; // Clear previous lines
+            clearLoggedRoutes();
+
+            const lines = Object.keys(data).sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+            
+            lines.forEach(line => {
+                const button = document.createElement('button');
+                button.textContent = line;
+                button.onclick = () => {
+                    clearLoggedRoutes();
+                    const routes = data[line];
+                    const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                    let colorIndex = 0;
+                    
+                    routes.forEach(route => {
+                        const polyline = L.polyline(route, { color: colors[colorIndex % colors.length] }).addTo(map);
+                        loggedRoutePolylines.push(polyline);
+                        colorIndex++;
+                    });
+
+                    if (loggedRoutePolylines.length > 0) {
+                        const group = new L.featureGroup(loggedRoutePolylines);
+                        map.fitBounds(group.getBounds());
+                    }
+                };
+                container.appendChild(button);
+            });
+        });
+}
+
+document.getElementById('logged-routes-btn').addEventListener('click', () => {
+    const sidebar = document.getElementById('logged-routes-sidebar');
+    const rightSidebar = document.getElementById('right-sidebar');
+    
+    // Toggle visibility
+    if (sidebar.style.display === 'none') {
+        sidebar.style.display = 'flex';
+        rightSidebar.style.display = 'none';
+        
+        // Fetch dates
+        fetch('/api/logged_routes/dates')
+            .then(response => response.json())
+            .then(dates => {
+                const selector = document.getElementById('date-selector');
+                selector.innerHTML = '';
+                dates.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.textContent = date;
+                    selector.appendChild(option);
+                });
+                // Fetch routes for the most recent date by default
+                if (dates.length > 0) {
+                    fetchLoggedRoutes(dates[0]);
+                }
+            });
+    } else {
+        sidebar.style.display = 'none';
+        rightSidebar.style.display = 'block';
+        clearLoggedRoutes();
+    }
+});
+
+document.getElementById('date-selector').addEventListener('change', (event) => {
+    fetchLoggedRoutes(event.target.value);
+});
+
+
 // --- Initial Load ---
 setStreetViewTheme();
 updateVehicleMarkers();

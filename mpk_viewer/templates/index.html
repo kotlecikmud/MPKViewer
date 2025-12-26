@@ -293,6 +293,7 @@
                 </div>
             </div>
         </div>
+        <a href="#" id="logged-routes-btn">Logged Routes</a>
         <a href="#" id="how-to-use-btn" data-modal="how-to-use-modal">How to Use</a>
         <a href="#" id="about-btn" data-modal="about-modal">About</a>
     </div>
@@ -324,6 +325,16 @@
 
     <div class="main-container">
         <div id="map"></div>
+
+        <div id="logged-routes-sidebar" class="sidebar" style="display: none;">
+            <button id="toggle-logged-routes-sidebar" class="sidebar-toggle"><i class="fa-solid fa-route"></i></button>
+            <div class="sidebar-content">
+                <h3>Logged Routes</h3>
+                <label for="date-selector">Select Date:</label>
+                <select id="date-selector"></select>
+                <div id="logged-lines-container"></div>
+            </div>
+        </div>
 
         <div id="right-sidebar" class="sidebar open">
             <button id="toggle-right-sidebar" class="sidebar-toggle"><i class="fa-solid fa-list-ul"></i></button>

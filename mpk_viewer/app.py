@@ -21,6 +21,33 @@ missing_lines_handler = logging.FileHandler('logs/missing_lines.log')
 missing_lines_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 missing_lines_logger.addHandler(missing_lines_handler)
 
+
+# --- Vehicle Data Logging Setup ---
+if not os.path.exists('vehicle_logs'):
+    os.makedirs('vehicle_logs')
+
+def setup_vehicle_logger(line):
+    log_dir = os.path.join('vehicle_logs', datetime.now().strftime('%Y-%m-%d'))
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = os.path.join(log_dir, f"line_{line}.log")
+    
+    logger_name = f"vehicle_data_{line}_{datetime.now().strftime('%Y%m%d')}"
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    
+    # Prevent adding multiple handlers if the logger is re-used in the same request/app context
+    if logger.hasHandlers():
+        # Clear existing handlers to reconfigure with the correct file path for the day
+        logger.handlers.clear()
+
+    handler = logging.FileHandler(log_file, encoding='utf-8')
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    handler.setFormatter(formatter)
+    
+    logger.addHandler(handler)
+    return logger
+
 app = Flask(__name__)
 client = MpykClient()
 
@@ -87,6 +114,26 @@ def get_vehicles():
     missing = live_lines - known_lines
     for line in missing:
         missing_lines_logger.info(f"Line '{line}' found in live data but not in routes.json")
+        
+    # --- Vehicle Data Logging ---
+    loggers = {}
+    try:
+        for p in positions:
+            if p.line not in loggers:
+                loggers[p.line] = setup_vehicle_logger(p.line)
+            
+            log_message = f"lat={p.lat}, lon={p.lon}, type={p.kind}, line={p.line}"
+            loggers[p.line].info(log_message)
+
+    except Exception as e:
+        app.logger.error(f"Failed to log vehicle data: {e}")
+    finally:
+        # Close all handlers to prevent file locking issues
+        for logger in loggers.values():
+            for handler in logger.handlers[:]:
+                handler.close()
+                logger.removeHandler(handler)
+    # --- End of Logging ---
 
     # Get the current time in Europe/Warsaw timezone
     tz = timezone('Europe/Warsaw')
@@ -195,6 +242,105 @@ def get_route(line):
 
     return jsonify({"line": line, "directions": processed_directions})
 
+
+from flask import request
+from datetime import timedelta
+from geopy.distance import geodesic
+import re
+
+@app.route('/api/logged_routes/dates')
+def get_logged_dates():
+    """Returns a list of dates for which logs are available."""
+    log_dir = 'vehicle_logs'
+    if not os.path.exists(log_dir):
+        return jsonify([])
+    
+    dates = [d for d in os.listdir(log_dir) if os.path.isdir(os.path.join(log_dir, d))]
+    valid_dates = []
+    for date_str in dates:
+        try:
+            datetime.strptime(date_str, '%Y-%m-%d')
+            valid_dates.append(date_str)
+        except ValueError:
+            continue
+            
+    return jsonify(sorted(valid_dates, reverse=True))
+
+
+@app.route('/api/logged_routes')
+def get_logged_routes_for_date():
+    """
+    Returns processed logged routes for a specific date.
+    Detects route ends if a vehicle is stationary for more than 10 minutes.
+    """
+    date = request.args.get('date')
+    if not date:
+        return jsonify({"error": "Date parameter is required"}), 400
+
+    log_dir = os.path.join('vehicle_logs', date)
+    if not os.path.exists(log_dir):
+        return jsonify({"error": "No logs found for this date"}), 404
+
+    all_routes = {}
+    
+    log_pattern = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s-\s'
+        r'lat=(?P<lat>[-?\d\.]+),\s'
+        r'lon=(?P<lon>[-?\d\.]+),'
+    )
+
+    for filename in os.listdir(log_dir):
+        if filename.startswith('line_') and filename.endswith('.log'):
+            line_name = filename.replace('line_', '').replace('.log', '')
+            filepath = os.path.join(log_dir, filename)
+            
+            points = []
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        match = log_pattern.match(line)
+                        if match:
+                            data = match.groupdict()
+                            points.append({
+                                'timestamp': datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S,%f'),
+                                'lat': float(data['lat']),
+                                'lon': float(data['lon'])
+                            })
+            except Exception as e:
+                app.logger.error(f"Error reading log file {filename}: {e}")
+                continue
+
+            if not points:
+                continue
+
+            points.sort(key=lambda p: p['timestamp'])
+
+            line_routes = []
+            current_route = []
+            
+            if points:
+                current_route.append((points[0]['lat'], points[0]['lon']))
+
+            for i in range(1, len(points)):
+                prev_point = points[i-1]
+                current_point = points[i]
+                
+                time_diff = current_point['timestamp'] - prev_point['timestamp']
+                
+                if time_diff > timedelta(minutes=10):
+                    if len(current_route) > 1:
+                        line_routes.append(current_route)
+                    current_route = [(current_point['lat'], current_point['lon'])]
+                else:
+                    current_route.append((current_point['lat'], current_point['lon']))
+
+            if len(current_route) > 1:
+                line_routes.append(current_route)
+            
+            if line_routes:
+                all_routes[line_name] = line_routes
+
+    return jsonify(all_routes)
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
