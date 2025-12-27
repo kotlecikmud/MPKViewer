@@ -122,7 +122,7 @@ def get_vehicles():
             if p.line not in loggers:
                 loggers[p.line] = setup_vehicle_logger(p.line)
             
-            log_message = f"lat={p.lat}, lon={p.lon}, type={p.kind}, line={p.line}"
+            log_message = f"lat={p.lat}, lon={p.lon}, type={p.kind}, line={p.line}, course={p.course}"
             loggers[p.line].info(log_message)
 
     except Exception as e:
@@ -286,7 +286,10 @@ def get_logged_routes_for_date():
     log_pattern = re.compile(
         r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d{3})\s-\s'
         r'lat=(?P<lat>[-?\d\.]+),\s'
-        r'lon=(?P<lon>[-?\d\.]+),'
+        r'lon=(?P<lon>[-?\d\.]+),\s'
+        r'type=(?P<type>\w+),\s'
+        r'line=(?P<line>[\w\d]+),\s'
+        r'course=(?P<course>\d+)'
     )
 
     for filename in os.listdir(log_dir):
@@ -294,48 +297,66 @@ def get_logged_routes_for_date():
             line_name = filename.replace('line_', '').replace('.log', '')
             filepath = os.path.join(log_dir, filename)
             
-            points = []
+            vehicles_points = {}
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     for line in f:
                         match = log_pattern.match(line)
                         if match:
                             data = match.groupdict()
-                            points.append({
+                            course = data['course']
+                            if course not in vehicles_points:
+                                vehicles_points[course] = []
+                            
+                            lat = float(data['lat'])
+                            lon = float(data['lon'])
+
+                            # Validate coordinates to prevent crashes with geopy
+                            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                                app.logger.warning(f"Invalid coordinates in {filename}: lat={lat}, lon={lon}. Skipping point.")
+                                continue
+                            
+                            vehicles_points[course].append({
                                 'timestamp': datetime.strptime(data['timestamp'], '%Y-%m-%d %H:%M:%S,%f'),
-                                'lat': float(data['lat']),
-                                'lon': float(data['lon'])
+                                'lat': lat,
+                                'lon': lon
                             })
             except Exception as e:
                 app.logger.error(f"Error reading log file {filename}: {e}")
                 continue
 
-            if not points:
-                continue
-
-            points.sort(key=lambda p: p['timestamp'])
-
             line_routes = []
-            current_route = []
-            
-            if points:
-                current_route.append((points[0]['lat'], points[0]['lon']))
+            for course, points in vehicles_points.items():
+                if not points:
+                    continue
 
-            for i in range(1, len(points)):
-                prev_point = points[i-1]
-                current_point = points[i]
-                
-                time_diff = current_point['timestamp'] - prev_point['timestamp']
-                
-                if time_diff > timedelta(minutes=10):
-                    if len(current_route) > 1:
-                        line_routes.append(current_route)
-                    current_route = [(current_point['lat'], current_point['lon'])]
-                else:
-                    current_route.append((current_point['lat'], current_point['lon']))
+                points.sort(key=lambda p: p['timestamp'])
 
-            if len(current_route) > 1:
-                line_routes.append(current_route)
+                current_route = []
+                if points:
+                    current_route.append((points[0]['lat'], points[0]['lon']))
+
+                for i in range(1, len(points)):
+                    prev_point = points[i-1]
+                    current_point = points[i]
+                    
+                    time_diff = current_point['timestamp'] - prev_point['timestamp']
+                    dist = geodesic((prev_point['lat'], prev_point['lon']), (current_point['lat'], current_point['lon'])).meters
+
+                    if time_diff > timedelta(minutes=10):
+                        if len(current_route) > 1:
+                            line_routes.append(current_route)
+                        current_route = []
+
+                    if not current_route:
+                         current_route.append((current_point['lat'], current_point['lon']))
+                    else:
+                        # Add point only if it's different from the last one to avoid redundant points
+                        if current_route[-1] != (current_point['lat'], current_point['lon']):
+                            current_route.append((current_point['lat'], current_point['lon']))
+
+                if len(current_route) > 1:
+                    line_routes.append(current_route)
             
             if line_routes:
                 all_routes[line_name] = line_routes
